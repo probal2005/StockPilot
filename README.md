@@ -582,6 +582,24 @@ Keep changes focused, preserve server-side authorization checks, and avoid commi
 - [Branding and Asset Generation](docs/BRAND.md)
 - [PDF Reports](docs/REPORTS.md)
 
+## 👨‍💻 Author
+
+<div align="center">
+
+<img src="https://github.com/probal2005.png" alt="Probal Dhali - GitHub Profile" width="140" height="140" style="border-radius: 50%;" />
+
+Probal Dhali
+
+Full-Stack Developer | AIML Student | Software Engineer in Progress
+
+Building practical software solutions with modern web technologies, clean UI design, and a focus on real-world usability.
+
+Project: StockPilot — Smart Inventory Management System
+
+🌐 Live Application · ⚙️ Worker / API
+
+</div>
+
 ## 📜 License
 
 Add the appropriate license file and update this section before distributing the project under a specific open-source license.
