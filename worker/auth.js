@@ -10,7 +10,7 @@
 import { HttpError, badRequest, fail, json, requireString } from './lib.js'
 
 const SCHEME = 'pbkdf2-sha256'
-const ITERATIONS = 120000 // ~40-60 ms per verification in workerd
+const ITERATIONS = 100000 // Cloudflare Workers Web Crypto iteration limit
 const SALT_BYTES = 16
 const TOKEN_BYTES = 32
 const SESSION_HOURS = 8
