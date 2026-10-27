@@ -1,258 +1,597 @@
-# StockPilot — Smart Inventory Management System
+# 📦 StockPilot — Smart Inventory Management System
 
-A single-tenant inventory platform for monitoring products, stock levels and inventory
-movement. Runs as a Cloudflare Worker (API + static assets) backed by a D1 SQLite
-database, with a React single-page front end.
+<p align="center">
+  <strong>A modern, analytics-driven inventory management platform.</strong>
+  <br />
+  Track products, manage stock movements, monitor inventory health, and generate detailed reports through a polished, interactive dashboard.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://stock-pilot-noms.vercel.app/">
+    <img src="https://img.shields.io/badge/🚀_LIVE_APPLICATION-Open_StockPilot-16a34a?style=for-the-badge" alt="Open StockPilot Live Application" />
+  </a>
+  <a href="https://stockpilot.probaldhali2006.workers.dev/">
+    <img src="https://img.shields.io/badge/⚙️_BACKEND_API-Cloudflare_Workers-f38020?style=for-the-badge" alt="StockPilot Cloudflare Worker" />
+  </a>
+</p>
 
-| Area | What it does |
-| --- | --- |
-| **Admin dashboard** | Stock value at cost/retail, units on hand, low-stock and out-of-stock counts, reorder budget, 7/14/30/90-day movement chart, recent activity, value by category, top movers |
-| **Product CRUD** | Create, read, update, archive/restore and permanently delete products; unique SKUs; opening stock recorded as a movement |
-| **Product images** | Every product is drawn as generated artwork (category family, tone and monogram from its SKU), and can carry a real photo instead — pick a file (downscaled to 512 px in the browser, ≤256 KB stored) or paste a link. Photos are stored in D1 and served by `/api/products/:id/image`; the artwork is the fallback everywhere and in the PDF |
-| **Stock in / stock out** | Single moves and bulk receipts/dispatches (up to 100 lines), stocktake adjustments, reversal of any entry. Over-issue is blocked; archived products cannot move stock |
-| **Low-stock alerts** | Worklist ordered by coverage, severity badges, suggested reorder quantity, one-click restock, estimated restock cost |
-| **Inventory reports** | Movement summary and daily/weekly/monthly trend, stock valuation with margin, category breakdown, top throughput, top value holdings |
-| **Health scoring** | Composite 0–100 score with an A–D grade from four weighted dimensions (availability, movement, freshness, balance), fill rate, stockout rate, days of cover, turnover, dormant capital and a ranked action list |
-| **Visual analytics** | Animated gauge, KPI rings, capital treemap, weekday × week activity heatmap, hour-of-day profile, stock-ageing meters, net-movement waterfall and stacked in/out columns — all CSV-exportable |
-| **Search & filtering** | Free-text search across name/SKU/category/supplier/location, category, stock-status and record-state filters, sortable columns, pagination, date-range filters |
-| **CSV export** | Products, movements, valuation, categories and low-stock lists (UTF-8 with BOM for Excel) |
-| **PDF report** | One-click decorated report (`/api/report.pdf`) built in the Worker with pdf-lib: branded cover with the health dial, position & valuation, movement analytics with vector charts, the restock worklist with recommended actions, a product gallery that prints every item's artwork or stored photo, and a full product register appendix (spanning two pages) — every download recorded in the audit trail |
-| **Authentication** | Session-based admin console: PBKDF2-hashed passwords, hashed session tokens in HttpOnly cookies, three roles (admin / operator / viewer) enforced per route, per-account lockout, password rotation and a credential audit trail — the seeded logins are printed under the login form |
-| **Theme & motion** | Dark "Aurora" glass theme with a light variant, switchable in the sidebar and remembered per browser (auto-detects the OS preference on first visit) |
-| **Brand** | StockPilot logo throughout (sidebar lockup, every page title, modals, empty/loading states, footer), app icons + PWA manifest, and one cyber watermark — grid, HUD reticle and the outline mark — centred in the viewport |
+<p align="center">
+  <a href="https://stock-pilot-noms.vercel.app/">Live Application</a>
+  &nbsp; • &nbsp;
+  <a href="https://stockpilot.probaldhali2006.workers.dev/">Backend Worker</a>
+</p>
 
-Every stock change writes to an append-only `stock_movements` ledger with the running
-balance, so the audit trail — not just the current quantity — is always available.
+---
 
-## Stack
+## 🌐 Live Demo
 
-- **Front end:** React 19 + Vite, hand-rolled SVG charts (no chart library), CSS custom
-  properties for theming, no CSS framework.
-- **Backend:** a Cloudflare Worker (ES module, plain `fetch` handler) with D1 (SQLite) and
-  static asset serving from the same Worker.
-- **PDF:** [pdf-lib](https://pdf-lib.js.org) — pure JavaScript, bundled into the Worker, so
-  the report needs no headless browser and no third-party rendering service. See
-  [`docs/REPORTS.md`](docs/REPORTS.md).
-- **Tests:** Node scripts only — `verify-api` against a live Worker, `verify-ui` driving the
-  real React app in jsdom against that API.
+| Resource | Description | Link |
+|---|---|---|
+| **Live Application** | Open the StockPilot web interface and explore the dashboard and inventory workflows. | [Launch StockPilot](https://stock-pilot-noms.vercel.app/) |
+| **Backend API** | Access the Cloudflare Worker deployment, which serves the API and application assets. | [Open Worker](https://stockpilot.probaldhali2006.workers.dev/) |
 
-## Design & motion
+**Start here:** Visit the live application to explore StockPilot. The Worker URL is provided for backend access and API diagnostics; it is not a separate dashboard.
 
-The interface is a dark glass theme (`--bg #05070f`, translucent cards over two slowly
-drifting aurora blobs) with a light glass variant selected by `[data-theme="light"]` on
-`<html>`. Everything on screen is driven by CSS custom properties, so the theme toggle is a
-single attribute flip and no component knows which theme is active.
+> Demo access is available through the login screen when demo credentials are enabled. Use only the intended demo accounts, and never reuse demo passwords for personal or production accounts.
 
-Charts are plain SVG — no charting library — and every one animates itself in:
+## 📖 Overview
 
-| Component | Motion |
-| --- | --- |
-| `BarChart` (bars / area / line) | Bars scale up from the baseline with a 26 ms per-column stagger; the area fades in and the line draws itself with a `pathLength`/`stroke-dashoffset` transition; hover lifts a column highlight and a tooltip |
-| `DonutChart` | Arcs sweep out from 0 via a rAF-driven progress value; segments and legend rows highlight each other on hover and the centre label swaps to the hovered slice |
-| `Sparkline` | Line draws in and the gradient fill fades up behind the KPI cards |
-| `AnimatedNumber` | Ease-out count-up for every KPI and stat value |
-| `RankBars` | Track widths sweep out with a staggered delay plus a slow sheen pass |
-| `Gauge` | 270° arc, its 28 ticks and a travelling dot all follow one eased progress value |
-| `RingStat` | Circular KPI rings whose arc closes as the value animates in |
-| `Treemap` | Squarified capital map; tiles scale up in sequence and drive a live readout on hover |
-| `Heatmap` | Weekday × week grid; cells fade up on a stagger, brighten by intensity and highlight on hover |
-| `Waterfall` | Received → issued → net columns that grow and float to their cumulative position |
-| `StackedBars` | Columns scale up per bucket, segments resize on data change, hover prints the detail |
-| `MiniBars` | Compact 24-bar hour profile and weekday totals with a hover readout |
-| `MeterList` | Labelled meters for the score's dimensions and the stock-ageing buckets |
-| Shell extras | Pointer-tracked card spotlight, rotating gradient border on hero cards, reveal-on-scroll sections |
-| Shell | Route-change transitions, staggered card rise-in, nav indicator slide, pulsing live-status dot, modal spring, toast slide-in with a countdown bar |
+StockPilot is a single-tenant inventory management platform designed to help teams monitor products, stock levels, inventory movements, and operational performance from one place.
 
-`src/components/ui.jsx` exposes the primitives: `useReducedMotion`, `useGrowIn` and
-`useProgress` are the three motion hooks, and they all honour
-`prefers-reduced-motion: reduce`, which disables the entire animation layer (verified by
-running the UI suite with `REDUCED_MOTION=1`).
+The application combines a React single-page interface with a Cloudflare Worker backend and a Cloudflare D1 SQLite database. It includes inventory CRUD operations, stock-in and stock-out workflows, low-stock alerts, supplier and purchasing workflows, cycle counting, role-based access control, visual analytics, and downloadable CSV and PDF reports.
 
-## Branding
+Every stock change is recorded in an append-only `stock_movements` ledger with a running balance. This preserves movement history and supports auditability instead of relying only on the current quantity.
 
-The logo — an isometric crate with a barcode label, rising bars, a paper plane and an
-orbital swoosh, plus a two-tone `STOCK`/`PILOT` wordmark — is authored once in
-`src/brand-art.js` and consumed in three ways: the inline React components in
-`src/brand.jsx`, the files generated into `public/` by `scripts/build-logo.mjs`, and the
-cyber watermark. It ships as the sidebar lockup, next to every page title, in modal
-headers, in the empty/loading states, in the page footer and as the favicon/app icon/PWA
-icon. The mark always prints on its own light plate so it stays legible on the dark theme.
+## ✨ Features
 
-`<CyberWatermark />` is a **single** emblem centred in the viewport — a faint technical
-grid, a glow plate, a rotating dashed HUD ring with corner brackets and a monospace
-readout, the outline of the logo, and a slow scanline. It is `currentColor`-driven
-(`--cyber-ink`, `--cyber-opacity`), blends with `screen` on dark and `multiply` on light,
-sits above the content but below modals and toasts, ignores pointer events, is hidden in
-print, and stops rotating and scanning under `prefers-reduced-motion`.
+### 📊 1. Admin Dashboard
 
-Full details, sizes and regeneration steps: [`docs/BRAND.md`](docs/BRAND.md).
-`npm run build:logo` re-emits `public/`; `npm run build:all` does that plus the front end
-and the worker bundle.
+- Stock valuation at cost and retail prices.
+- Total units on hand.
+- Low-stock and out-of-stock counts.
+- Reorder budget and inventory health indicators.
+- Configurable 7-, 14-, 30-, and 90-day movement charts.
+- Recent inventory activity and category valuation.
+- Top-moving products and stock alerts.
+- Animated KPI cards, gauges, rings, and sparklines.
 
-## Layout
+### 📦 2. Product Management
 
+- Create, view, edit, archive, restore, and permanently delete products.
+- Unique SKU validation.
+- Product categories, suppliers, and storage locations.
+- Searchable, sortable, paginated product tables.
+- Filters for category, stock status, and record state.
+- Opening stock recorded as an inventory movement.
+
+### 🖼️ 3. Product Images and Artwork
+
+Every product can display generated artwork or a real product photograph.
+
+- Category-based artwork with a generated tone and SKU monogram.
+- Upload a photo or provide an image URL.
+- Browser-side image downscaling to 512 pixels.
+- Stored photos limited to 256 KB.
+- Images stored in D1 and served through `/api/products/:id/image`.
+- Generated artwork used as the fallback in the interface and PDF reports.
+- Live previews when selecting or editing a product image.
+
+### 🔄 4. Stock In, Stock Out, and Adjustments
+
+- Record individual stock receipts and dispatches.
+- Process bulk receipts or dispatches with up to 100 lines.
+- Perform stocktake adjustments.
+- Reverse an existing movement using a compensating ledger entry.
+- Prevent issuing more stock than is available.
+- Block stock movements for archived products.
+- Maintain a running inventory balance and a traceable movement history.
+
+### 🚨 5. Low-Stock Alerts and Replenishment
+
+- Reorder worklist organized by stock coverage and severity.
+- Suggested reorder quantities.
+- One-click restocking actions.
+- Estimated replenishment costs.
+- Low-stock and out-of-stock indicators.
+- Filters for urgency and replenishment status.
+
+### 📈 6. Inventory Reports and Analytics
+
+- Movement summaries and daily, weekly, and monthly trends.
+- Stock valuation and margin analysis.
+- Category-level inventory breakdowns.
+- Top-throughput products and highest-value holdings.
+- Inventory health score from 0 to 100, with an A–D grade.
+- Availability, movement, freshness, and balance dimensions.
+- Fill rate, stockout rate, days of cover, and turnover.
+- Dormant capital analysis and ranked improvement actions.
+- Stock-ageing buckets and inventory coverage indicators.
+
+### 📉 7. Interactive Data Visualizations
+
+StockPilot uses hand-built SVG visualizations instead of a charting library.
+
+| Visualization | Purpose |
+|---|---|
+| Bar, area, and line charts | Analyze inventory movement trends |
+| Donut chart | Explore category distribution |
+| Sparklines | Show compact KPI trends |
+| Animated number counters | Highlight key metrics |
+| Ranked bars | Compare top-moving products |
+| Health gauge | Display inventory health and grade |
+| KPI rings | Visualize inventory performance indicators |
+| Capital treemap | Compare inventory value by category |
+| Activity heatmap | Explore weekday and weekly patterns |
+| Waterfall chart | Compare stock received, issued, and net movement |
+| Stacked bars | Compare stock-in and stock-out activity |
+| Hourly and weekday profiles | Identify movement patterns |
+| Meter lists | Examine health dimensions and stock ageing |
+
+Charts include animated transitions, hover interactions, contextual readouts, and reduced-motion support. Relevant analytics can also be exported as CSV.
+
+### 🔎 8. Search, Filtering, and Navigation
+
+- Free-text search across product names, SKUs, categories, suppliers, and locations.
+- Category and stock-status filters.
+- Active, archived, and all-record views.
+- Sortable columns and pagination.
+- Date-range filters for reports and inventory activity.
+- Responsive navigation with role-aware sections.
+
+### 📤 9. CSV Exports
+
+Export operational data for spreadsheet analysis and external reporting.
+
+- Products
+- Stock movements
+- Inventory valuation
+- Categories
+- Low-stock worklists
+- Inventory health
+- Activity analytics
+
+CSV exports use UTF-8 with a byte-order mark (BOM) for improved compatibility with spreadsheet applications such as Microsoft Excel.
+
+### 📄 10. Decorated PDF Reports
+
+Generate a multi-page PDF report directly from the Worker using `pdf-lib`.
+
+The report can include:
+
+- Branded cover and inventory health dial.
+- Inventory position and valuation.
+- Movement analytics with vector charts.
+- Restocking recommendations and worklist.
+- Product gallery containing generated artwork or stored photos.
+- Full product register appendix spanning multiple pages.
+- Audit-trail recording for report downloads.
+
+The PDF is generated without a headless browser or a separate document-rendering service.
+
+See [`docs/REPORTS.md`](docs/REPORTS.md) for report details and extension guidance.
+
+### 🔐 11. Authentication and Access Control
+
+- Session-based authentication.
+- PBKDF2 password hashing.
+- Hashed session tokens stored in D1.
+- HttpOnly session cookies.
+- Three roles: `admin`, `operator`, and `viewer`.
+- Per-account login lockout.
+- Password rotation.
+- Session revocation.
+- Credential audit trail.
+- Server-side authorization enforced for protected routes.
+
+Permissions are enforced by the Worker, not just by hiding interface controls. For example, a viewer's unauthorized write request is still rejected by the backend.
+
+See [`docs/AUTH.md`](docs/AUTH.md) for authentication, roles, sessions, and endpoints.
+
+### 🛒 12. Procurement and Cycle Counting
+
+The application also includes purchasing and inventory-verification workflows, including:
+
+- Supplier management.
+- Purchase orders and replenishment workflows.
+- Receiving and purchase-order transitions.
+- Cycle-count creation and updates.
+- Count posting and inventory reconciliation.
+- Role-aware access to procurement and counting operations.
+
+### 🎨 13. Theme, Branding, and Motion
+
+- Dark Aurora glass theme.
+- Light theme alternative.
+- Theme preference persisted per browser.
+- Initial theme selection based on operating-system preference.
+- Custom StockPilot logo, wordmark, and application icons.
+- Branded sidebar, page titles, modals, empty states, and footer.
+- Progressive chart animations and interactive hover effects.
+- Animated navigation, modals, toasts, and card transitions.
+- Cyber watermark featuring a technical grid, HUD ring, logo outline, and scanline.
+- Reduced-motion support through `prefers-reduced-motion`.
+- Watermark and animation behavior adjusted for printing and accessibility.
+
+The interface is driven by CSS custom properties, allowing the theme to switch without individual components needing to know which theme is active.
+
+## 🧰 Technology Stack
+
+<p>
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Vite-Frontend-646CFF?style=flat&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/JavaScript-ES_Modules-F7DF1E?style=flat&logo=javascript&logoColor=black" alt="JavaScript" />
+  <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+  <img src="https://img.shields.io/badge/Cloudflare-D1_SQLite-F38020?style=flat&logo=cloudflare&logoColor=white" alt="Cloudflare D1" />
+  <img src="https://img.shields.io/badge/PDF-pdf--lib-red?style=flat" alt="pdf-lib" />
+</p>
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite |
+| UI and styling | Custom CSS, CSS custom properties, SVG |
+| Backend | Cloudflare Workers, JavaScript ES modules |
+| Database | Cloudflare D1 (SQLite) |
+| PDF generation | `pdf-lib` |
+| Static assets | Cloudflare Worker asset binding |
+| API testing | Node.js verification scripts |
+| UI testing | jsdom and Node.js verification scripts |
+| Frontend hosting | Vercel |
+| Backend hosting | Cloudflare Workers |
+
+No CSS framework or charting library is required.
+
+## 🏗️ Architecture
+
+```text
+                    ┌─────────────────────────┐
+                    │      User / Browser     │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │   React + Vite Frontend │
+                    │  Dashboard / Inventory  │
+                    └────────────┬────────────┘
+                                 │ HTTPS /api
+                    ┌────────────▼────────────┐
+                    │    Cloudflare Worker    │
+                    │  Routing / Auth / Logic │
+                    └───────┬─────────┬────────┘
+                            │         │
+                  ┌─────────▼───┐ ┌───▼────────────┐
+                  │ Cloudflare  │ │ Static Assets  │
+                  │ D1 / SQLite │ │ HTML / JS / CSS│
+                  └─────────────┘ └────────────────┘
 ```
-worker/
-  index.js      router + static asset handling
-  report-pdf.js decorated PDF report (page layout engine + five page compositions)
-  lib.js        responses, errors, validation, CSV helpers
-  schema.js     DDL + deterministic 45-day demo seed
-  products.js   product CRUD, search/filter, categories, CSV export
-  stock.js      stock in/out, bulk moves, adjustments, reversals
-  insights.js   dashboard KPIs, alerts, reports
-  auth.js       sessions, roles, lockout, audit trail
-src/
-  App.jsx       session gate + shell, role-gated navigation, live status
-  api.js        API client + formatting helpers
-  auth.jsx      session context, capability map, 401 handling
-  brand-art.js  logo geometry + watermark glyph (single source of truth)
-  brand.jsx     logo, watermark, footer components
-  styles.css    design system
-  components/   Login, Admin (access control), Account, Dashboard, Products,
-                Stock, Alerts, Reports, ui primitives
-public/         generated brand assets: logo/favicon/watermark SVGs + PNG app icons
-docs/BRAND.md   brand kit and regeneration instructions
-docs/AUTH.md    roles, password hashing, sessions, lockout, endpoints, seeded logins
-docs/REPORTS.md the PDF report: contents, design, endpoints, how to extend and proof it
-scripts/
-  build-worker.mjs  bundles worker/ into build/worker.js for deployment
-  build-logo.mjs    writes the brand assets from src/brand-art.js
-  verify-api.mjs    API assertions
-  verify-ui.mjs     DOM + interaction assertions against the real app
+
+The live frontend is available through Vercel. API requests from the frontend use the relative `/api` path and are rewritten to the Cloudflare Worker. The Worker handles API routes, authentication, business logic, PDF generation, and static assets.
+
+## 📁 Project Structure
+
+```text
+StockPilot/
+├── worker/
+│   ├── index.js          # API router and static asset handling
+│   ├── report-pdf.js     # Multi-page PDF report generation
+│   ├── lib.js            # Responses, errors, validation and CSV helpers
+│   ├── schema.js         # Database schema and demo seed
+│   ├── products.js       # Product CRUD, filters and exports
+│   ├── stock.js          # Stock movements and adjustments
+│   ├── insights.js       # Dashboard, alerts and analytics
+│   ├── auth.js           # Authentication, sessions, roles and audit
+│   ├── procure.js        # Supplier and purchase-order workflows
+│   └── counts.js         # Cycle-count workflows
+├── src/
+│   ├── App.jsx           # Session gate and application shell
+│   ├── api.js            # API client and formatting helpers
+│   ├── auth.jsx          # Session context and capability map
+│   ├── brand-art.js      # Logo geometry and watermark source
+│   ├── brand.jsx         # Logo, watermark and footer components
+│   ├── styles.css        # Design system and themes
+│   └── components/
+│       ├── Login.jsx
+│       ├── Dashboard.jsx
+│       ├── Products.jsx
+│       ├── Stock.jsx
+│       ├── Alerts.jsx
+│       ├── Reports.jsx
+│       ├── Admin.jsx
+│       ├── Account.jsx
+│       └── ui.jsx
+├── public/               # Brand assets, icons and PWA manifest
+├── docs/
+│   ├── AUTH.md           # Authentication and authorization
+│   ├── BRAND.md          # Brand assets and regeneration
+│   └── REPORTS.md        # PDF reports and design
+├── scripts/
+│   ├── build-worker.mjs  # Worker bundle builder
+│   ├── build-logo.mjs    # Brand asset generator
+│   ├── verify-api.mjs    # API verification suite
+│   └── verify-ui.mjs     # UI and interaction verification
+├── index.html
+├── package.json
+├── vercel.json
+├── wrangler.toml
+└── README.md
 ```
 
-## Running locally
+## ⚙️ Run Locally
+
+### Prerequisites
+
+- Node.js and npm.
+- A Cloudflare account for Worker and D1 development.
+- Wrangler CLI, available through `npx wrangler`.
+- A configured D1 database for the full backend workflow.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/probal2005/StockPilot.git
+cd StockPilot
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
-npm run build:all             # brand assets + front end (dist/) + worker bundle
-npm run build                 # just the front end into dist/ (served by the Worker)
-npm run dev:worker            # Worker API + app on http://localhost:8787
-npm run dev                   # Vite dev server on http://localhost:3000, proxies /api to 8787
 ```
 
-The first API request creates the schema and, on an empty database, seeds 26 demo
-products with 45 days of movement history **and the three team accounts**. The app
-opens on the login screen; the seeded credentials are printed below the form and can be
-filled with one click. Roles, lockout and the audit trail are documented in
-[`docs/AUTH.md`](docs/AUTH.md). No migration command is required — DDL
-runs as a transactional batch and the seed is skipped once products exist.
-
-## API
-
-```
-POST   /api/auth/login              { email, password, remember? } -> session cookie
-GET    /api/auth/demo               seeded credentials still using the seeded password
-GET    /api/auth/session            { authenticated, user, active_sessions }
-POST   /api/auth/logout             revokes the token, clears the cookie
-POST   /api/auth/password           { current_password, new_password } (signs other devices out)
-GET    /api/auth/accounts           [admin] team, roles, live sessions, lock state
-GET    /api/auth/events?limit=      [admin] credential audit trail
-POST   /api/auth/unlock             [admin] { email } clears a lockout
-POST   /api/auth/revoke             [admin] { email } ends that account's sessions
-
-GET    /api/health                  (public — everything else needs a session)
-GET    /api/dashboard?days=14
-GET    /api/alerts?threshold=5
-GET    /api/categories
-GET    /api/products?search=&category=&status=ok|low|out&active=1|0|all&sort=&dir=&page=&limit=
-POST   /api/products
-GET    /api/products/:id
-PUT    /api/products/:id            (quantity edits are logged as adjustments)
-DELETE /api/products/:id?mode=archive|purge
-POST   /api/products/:id/restore
-GET    /api/movements?type=&product_id=&from=&to=&search=&page=&limit=
-POST   /api/movements               { product_id, type: in|out|adjust, quantity, unit_cost?, reference?, note? }
-POST   /api/movements/bulk          { type: in|out, lines: [{ product_id, quantity }] }
-DELETE /api/movements/:id           (posts a compensating reversal)
-GET    /api/reports/summary?from=&to=
-GET    /api/reports/valuation?category=
-GET    /api/reports/movement?from=&to=&group=day|week|month
-GET    /api/reports/health?from=&to=                 (score, dimensions, KPIs, ageing, actions)
-GET    /api/reports/activity?from=&to=               (week × weekday cells + hour profile)
-GET    /api/report.pdf?from=&to=&inline=1        decorated multi-page PDF report (download)
-GET    /api/export.csv?type=products|movements|valuation|categories|lowstock|health|activity
-```
-
-Errors return `{ "error": "...", "details": ... }` with 400 (validation), 401 (no or
-expired session), 403 (role or cross-origin refusal), 404, 405, 409 (conflict /
-insufficient stock), 429 (locked account) or 500. Every route declares the capability
-it needs (`public` → `read` → `move` → `manage` → `admin`); nothing is authenticated
-by accident.
-
-## Verification
-
-```bash
-npm run dev:worker &          # API must be reachable on :8787
-npm run verify:api            # 319 checks: auth, roles, lockout, CRUD, stock maths, procurement, cycle counting, reports, CSV, PDF
-npm run verify:ui             # 234 checks: login flow, roles, every screen, brand, charts, PDF link, procurement, cycle counting
-npm run verify:ui:reduced     # same suite down the prefers-reduced-motion path
-npm run verify                # all three, in order
-```
-
-Build first (`npm run build:all`): the UI suite also fetches the served brand assets from
-the Worker to prove the icons and manifest are wired up.
-
-Both suites build and clean up their own fixtures (`UITEST-*`, `QA-*` products), so they
-never depend on — or damage — whatever data is already in the database.
-
-The UI suite drives the real React app inside jsdom against the live API: it searches,
-opens and closes modals, switches chart types, toggles the theme, and asserts on rendered
-output (bar counts, donut arc geometry, count-up values matching the API exactly once the
-animation has settled, rank-bar widths after animating). It also checks the brand contract
-(the lockup and wordmark on every screen, the single centred watermark emblem and its shared
-geometry, theme ink variables, blend modes, reduced-motion and print rules, and that every
-generated file in `public/` is byte-identical to `src/brand-art.js`) and the visualisation
-contract: the gauge sweeps to the API's score, the ring strip matches the health KPIs, the
-treemap covers every funded category and drives its readout on hover, the heatmap is a full
-weekday grid with live hover detail, the waterfall/stacked/mini-bar charts animate to real
-heights, and no section is left hidden by the reveal-on-scroll wrapper.
-
-The UI suite starts signed out: it asserts the login screen, reads the credentials
-panel (including per-row reveal), fails a sign-in to prove the error state, then signs
-in through the form itself — every later request rides the cookie captured from the
-`Set-Cookie` header. It then walks the admin-only access console, opens the account
-panel, signs out, signs back in as the viewer, and checks the read-only layout before
-forcing a viewer write to prove the Worker still refuses it.
-
-The PDF report is checked from the outside in: the API suite asserts the response headers,
-page objects and — by inflating the Flate-compressed content streams and decoding the text
-operators — that the rendered document really contains the cover title, the brand, the
-requester, the health score and grade, every KPI label and all five section headings; the UI
-suite asserts that both screens link to it with the window currently on screen and that
-fetching that link returns a multi-page PDF. The report's *appearance* was proofed by
-rasterising it page by page with pdfium and looking at every page
-(see [`docs/REPORTS.md`](docs/REPORTS.md)).
-
-jsdom has no CSS engine, so **layout, colour and CSS keyframes are not machine-verified** —
-the logo and watermark were proofed by rasterising the real component output, and the final
-judgement is the browser preview.
-
-To prove the *deployed* artifact behaves identically, build the bundle and run the
-same suite against it (it gets its own database name, so seeding is exercised too):
+### 3. Build the application
 
 ```bash
 npm run build:all
-npx wrangler dev --config wrangler.bundle-check.toml --port 8788 &
-node scripts/verify-api.mjs http://127.0.0.1:8788
 ```
 
-## Deployment notes
+This generates the brand assets, builds the frontend into `dist/`, and bundles the Worker into `build/worker.js`.
 
-- `npm run build:all` produces `dist/` (static, including the brand assets from `public/`)
-  and `build/worker.js` (single ES module).
-- Deploy with `dist/` as the assets directory and `build/worker.js` as the entrypoint,
-  plus a D1 binding named `DB`. The Worker bundle is ~1 MB raw / ~250 KB gzipped, mostly
-  pdf-lib for the PDF report; both are comfortably inside the Workers script limits.
-- The Worker is a plain fetch handler: API routes first, then `env.ASSETS.fetch()`, with
-  `index.html` as the fallback for client-side routes.
-- Authentication is built in ([`docs/AUTH.md`](docs/AUTH.md)). Before a real deployment:
-  set `DEMO_CREDENTIALS = "off"` in `wrangler.toml` (hides the credential readout and the
-  `/api/auth/demo` list), sign in as the seeded admin and rotate the three demo passwords
-  from the account panel, and serve over HTTPS so the session cookie is issued `Secure`.
-- Sessions live in D1 (`auth_sessions`), so no extra store is required; expired rows are
-  ignored on read and can be pruned with a scheduled task if you want the table small.
-- The theme is stored in `localStorage` under `stockpilot:theme`; the session token is
-  never touched by JavaScript — it stays in the HttpOnly cookie.
+### 4. Start the Worker locally
+
+```bash
+npm run dev:worker
+```
+
+The Worker development server is expected at:
+
+`http://localhost:8787`
+
+### 5. Start the Vite development server
+
+Open another terminal in the project directory:
+
+```bash
+npm run dev
+```
+
+The Vite server is expected at:
+
+`http://localhost:3000`
+
+Vite proxies `/api` requests to the local Worker.
+
+### Available build commands
+
+```bash
+npm run build       # Build the frontend into dist/
+npm run build:all   # Build brand assets, frontend and Worker bundle
+npm run build:logo  # Regenerate brand assets
+```
+
+The first API request initializes the database schema. On an empty database, the application seeds demo products, historical movements, and team accounts. Seeding is skipped after products already exist.
+
+## 🔌 API Reference
+
+All protected routes require a valid session unless otherwise specified.
+
+### Authentication
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/auth/login` | Sign in using email and password |
+| `GET` | `/api/auth/demo` | Demo-account information when enabled |
+| `GET` | `/api/auth/session` | Inspect the current session |
+| `POST` | `/api/auth/logout` | Revoke the current session |
+| `POST` | `/api/auth/password` | Change the current password |
+| `GET` | `/api/auth/accounts` | Admin: list accounts, roles, and session status |
+| `GET` | `/api/auth/events?limit=` | Admin: inspect credential audit events |
+| `POST` | `/api/auth/unlock` | Admin: unlock an account |
+| `POST` | `/api/auth/revoke` | Admin: revoke an account's sessions |
+
+### Inventory and Operations
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Public health check |
+| `GET` | `/api/dashboard?days=14` | Dashboard metrics |
+| `GET` | `/api/alerts?threshold=5` | Low-stock alerts |
+| `GET` | `/api/categories` | Product categories |
+| `GET` | `/api/products` | Search, filter, sort, and paginate products |
+| `POST` | `/api/products` | Create a product |
+| `GET` | `/api/products/:id` | Retrieve a product |
+| `PUT` | `/api/products/:id` | Update product details |
+| `DELETE` | `/api/products/:id?mode=archive` | Archive a product |
+| `DELETE` | `/api/products/:id?mode=purge` | Permanently delete a product |
+| `POST` | `/api/products/:id/restore` | Restore an archived product |
+| `GET` | `/api/products/:id/image` | Retrieve a product image |
+| `GET` | `/api/movements` | Search and filter stock movements |
+| `POST` | `/api/movements` | Record a stock movement |
+| `POST` | `/api/movements/bulk` | Record bulk stock movements |
+| `DELETE` | `/api/movements/:id` | Reverse a movement |
+| `GET` | `/api/reports/summary?from=&to=` | Movement and inventory summary |
+| `GET` | `/api/reports/valuation?category=` | Inventory valuation |
+| `GET` | `/api/reports/movement?from=&to=&group=` | Movement trends |
+| `GET` | `/api/reports/health?from=&to=` | Health score and recommendations |
+| `GET` | `/api/reports/activity?from=&to=` | Activity heatmap and hourly profile |
+| `GET` | `/api/report.pdf?from=&to=` | Generate a decorated PDF report |
+| `GET` | `/api/export.csv?type=products` | Export supported data to CSV |
+
+The products endpoint supports query parameters such as `search`, `category`, `status`, `active`, `sort`, `dir`, `page`, and `limit`. The movement endpoint supports filters such as `type`, `product_id`, `from`, `to`, `search`, `page`, and `limit`.
+
+Stock movement requests accept types such as `in`, `out`, and `adjust`. Bulk movement requests contain a list of product IDs and quantities.
+
+Error responses follow this general structure:
+
+```json
+{
+  "error": "Human-readable error message",
+  "details": null
+}
+```
+
+Common HTTP status codes include `400` for validation errors, `401` for missing or expired sessions, `403` for authorization or origin-policy refusals, `404` for missing resources, `405` for unsupported methods, `409` for conflicts or insufficient stock, `429` for account lockout, and `500` for unexpected server errors.
+
+## 🧪 Verification and Testing
+
+StockPilot includes automated API and UI verification scripts.
+
+| Command | Purpose |
+|---|---|
+| `npm run verify:api` | Verify API behavior, authentication, inventory operations, reports, and exports |
+| `npm run verify:ui` | Verify login, roles, UI interactions, charts, branding, and reports |
+| `npm run verify:ui:reduced` | Exercise the UI with reduced-motion preferences |
+| `npm run verify` | Run the complete verification sequence |
+
+Build the application first:
+
+```bash
+npm run build:all
+```
+
+Start the local Worker in one terminal:
+
+```bash
+npm run dev:worker
+```
+
+Then run the API suite in another terminal:
+
+```bash
+npm run verify:api
+```
+
+Run the UI suite:
+
+```bash
+npm run verify:ui
+```
+
+The UI tests use jsdom to exercise the real React application against the API, including authentication flows, role-based restrictions, charts, theme switching, exports, and PDF links.
+
+The test suites create and clean up their own fixtures. They are designed to avoid depending on or damaging existing inventory records.
+
+**Testing limitation:** jsdom does not implement a full browser CSS layout engine. Browser-based visual inspection is still needed to assess actual layout, colors, and animation appearance.
+
+## 🚀 Deployment
+
+### Frontend
+
+The frontend is deployed on Vercel:
+
+**Live application:** https://stock-pilot-noms.vercel.app/
+
+The repository's `vercel.json` rewrites `/api` requests to the Cloudflare Worker.
+
+### Backend
+
+The Worker is deployed on Cloudflare:
+
+**Worker endpoint:** https://stockpilot.probaldhali2006.workers.dev/
+
+The Worker uses a D1 database binding named `DB` and an asset binding named `ASSETS`.
+
+### Build and deployment workflow
+
+```bash
+npm install
+npm run build:all
+npx wrangler deploy
+```
+
+Before deploying, verify the following:
+
+- The configured D1 database exists and the `DB` binding points to the intended database.
+- The Worker entry point and static asset directory match the deployment configuration.
+- The frontend rewrite targets the correct Worker URL.
+- Production environment variables are configured correctly.
+- Authentication and demo-account behavior have been reviewed for production use.
+- The built application and verification suites pass.
+
+The deployment command publishes the Worker and its configured assets. It does not automatically guarantee that a separate Vercel deployment has updated; confirm that the frontend deployment is also current when its assets change.
+
+## 🔒 Security Notes
+
+StockPilot includes server-side authentication, hashed passwords, session-token hashing, HttpOnly cookies, account lockout, role-based authorization, and origin validation for write requests.
+
+Before using the application with real inventory or accounts:
+
+1. **Disable public demo credentials.** Set `DEMO_CREDENTIALS = "off"` in the production Worker configuration and verify that `/api/auth/demo` no longer exposes demo passwords.
+2. **Rotate seeded passwords.** Sign in using the intended administrative account and change all seeded account passwords.
+3. **Use unique credentials.** Never reuse demo passwords for personal or production accounts.
+4. **Protect production configuration.** Keep secrets out of source control and configure sensitive values through the appropriate deployment settings.
+5. **Review access roles.** Assign the minimum required permissions to operators and viewers.
+6. **Use HTTPS.** Ensure the application and session-cookie settings are appropriate for secure production traffic.
+7. **Review backups and recovery.** Establish an appropriate backup and restore process for production inventory data.
+8. **Validate deployment settings.** Confirm the live Worker and frontend are using the intended configuration before handling real business data.
+
+The seeded demo login information is intended for demonstration only. Public demo access should not be treated as a production authentication strategy.
+
+## 🎨 Branding and Design
+
+StockPilot's visual identity is authored from a single source in `src/brand-art.js`.
+
+The brand system generates the React logo components, SVG assets, application icons, and cyber watermark. This keeps the brand geometry consistent across the interface.
+
+The cyber watermark is a single centered emblem with a technical grid, glow plate, HUD ring, corner brackets, logo outline, and scanline. It is designed to remain decorative, ignore pointer events, adapt to the current theme, stay behind modals, and respect reduced-motion and print preferences.
+
+Regenerate the brand assets with:
+
+```bash
+npm run build:logo
+```
+
+For the complete brand kit and regeneration details, see [`docs/BRAND.md`](docs/BRAND.md).
+
+## 🗺️ Roadmap and Extension Ideas
+
+Potential future improvements include:
+
+- Automated low-stock notifications.
+- Scheduled inventory and valuation reports.
+- Barcode and QR-code scanning.
+- Advanced supplier performance analytics.
+- Multi-warehouse inventory management.
+- Import workflows for external inventory spreadsheets.
+- More comprehensive backup and restore tooling.
+- Additional integration and end-to-end browser tests.
+
+These are potential extensions rather than claims about currently implemented functionality.
+
+## 🤝 Contributing
+
+Contributions, bug reports, and feature suggestions are welcome.
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes and run the relevant verification scripts.
+4. Open a pull request describing the changes and the tests performed.
+
+Keep changes focused, preserve server-side authorization checks, and avoid committing credentials, local databases, or generated build artifacts unless the project explicitly requires them.
+
+## 📄 Documentation
+
+- [Authentication and Authorization](docs/AUTH.md)
+- [Branding and Asset Generation](docs/BRAND.md)
+- [PDF Reports](docs/REPORTS.md)
+
+## 📜 License
+
+Add the appropriate license file and update this section before distributing the project under a specific open-source license.
+
+---
+
+<p align="center">
+  <strong>StockPilot — Know Your Stock. Make Smarter Decisions.</strong>
+  <br />
+  <a href="https://stock-pilot-noms.vercel.app/">Launch Live Application</a>
+  &nbsp; • &nbsp;
+  <a href="https://stockpilot.probaldhali2006.workers.dev/">Backend Worker</a>
+</p>
