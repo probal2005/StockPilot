@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api",
+      "destination": "https://smart-inventory.probaldhali2006.workers.dev/api"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "https://smart-inventory.probaldhali2006.workers.dev/api/$1"
+    }
+  ]
+}
