@@ -1,0 +1,16 @@
+name = "smart-inventory"
+main = "worker/index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+DEMO_CREDENTIALS = "on"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "inventory-db"
+database_id = "d09389f1-9439-4273-bf38-f632cde757f0"

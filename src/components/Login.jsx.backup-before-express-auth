@@ -1,0 +1,219 @@
+/* ==========================================================================
+   The sign-in screen. Same aurora glass language as the app shell, plus the
+   seeded team credentials printed below the form (from /api/auth/demo, which
+   only returns accounts whose password is still the seeded one).
+   ========================================================================== */
+import { useEffect, useRef, useState } from 'react'
+import { ROLE_BLURB, ROLE_LABEL, useAuth } from '../auth.jsx'
+import { CyberWatermark, Logo, LogoMark } from '../brand.jsx'
+import { Badge } from './ui.jsx'
+
+const mmss = (seconds) => {
+  const s = Math.max(0, Math.floor(seconds))
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+}
+
+export default function Login() {
+  const { login, demo, notice, dismissNotice, loading } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
+  const [reveal, setReveal] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [attemptsLeft, setAttemptsLeft] = useState(null)
+  const [lockFor, setLockFor] = useState(0)
+  const [shake, setShake] = useState(0)
+  const [revealed, setRevealed] = useState({})
+  const passwordRef = useRef(null)
+
+  /* Lockout countdown: the Worker sends retry_after, we tick it down locally. */
+  useEffect(() => {
+    if (lockFor <= 0) return
+    const id = setInterval(() => setLockFor((s) => (s <= 1 ? 0 : s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [lockFor])
+
+  const locked = lockFor > 0
+
+  const submit = async (event) => {
+    event?.preventDefault()
+    if (busy || locked) return
+    setBusy(true)
+    setError(null)
+    setAttemptsLeft(null)
+    try {
+      await login(email.trim(), password, remember)
+    } catch (e) {
+      setError(e.message)
+      setShake((n) => n + 1)
+      if (e.status === 429 && e.details?.retry_after) setLockFor(e.details.retry_after)
+      else if (e.details?.attempts_left != null) setAttemptsLeft(e.details.attempts_left)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const useAccount = (account) => {
+    setEmail(account.email)
+    setPassword(account.password)
+    setError(null)
+    setAttemptsLeft(null)
+    passwordRef.current?.focus()
+  }
+
+  return (
+    <div className="login-screen" id="login-screen">
+      <CyberWatermark />
+      <div className="login-aurora" aria-hidden="true" />
+
+      <div className="login-wrap">
+        <section className="login-card glass" key={shake} data-shake={shake || undefined}>
+          <div className="login-card-glow" aria-hidden="true" />
+          <header className="login-head">
+            <Logo size={44} tagline="ADMIN CONSOLE" />
+          </header>
+
+          <div className="login-title">
+            <h1>Sign in</h1>
+            <p className="muted">
+              Role-based access — viewers read, operators move stock, admins manage the catalogue and the team.
+            </p>
+          </div>
+
+          {notice && !error && (
+            <div className="login-notice" role="status">
+              <span aria-hidden="true">◆</span>
+              <span>{notice}</span>
+              <button type="button" className="link-btn" onClick={dismissNotice}>Dismiss</button>
+            </div>
+          )}
+
+          {error && (
+            <div className="login-error" role="alert">
+              <span className="login-error-icon" aria-hidden="true">!</span>
+              <div className="login-error-copy">
+                <strong>{error}</strong>
+                {attemptsLeft != null && (
+                  <span>{attemptsLeft} attempt{attemptsLeft === 1 ? '' : 's'} left before the account locks.</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {locked && (
+            <div className="login-lock" role="alert">
+              <span aria-hidden="true">⏳</span>
+              <span>Locked for failed attempts. Try again in</span>
+              <strong className="mono">{mmss(lockFor)}</strong>
+            </div>
+          )}
+
+          <form className="login-form" onSubmit={submit} noValidate>
+            <label className="login-field">
+              <span className="login-label">Work email</span>
+              <span className="login-input">
+                <span className="login-input-icon" aria-hidden="true">@</span>
+                <input
+                  name="email" type="email" autoComplete="username" inputMode="email"
+                  placeholder="admin@stockpilot.app" value={email} disabled={locked}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </span>
+            </label>
+
+            <label className="login-field">
+              <span className="login-label">Password</span>
+              <span className="login-input">
+                <span className="login-input-icon" aria-hidden="true">•••</span>
+                <input
+                  ref={passwordRef} name="password" type={reveal ? 'text' : 'password'}
+                  autoComplete="current-password" placeholder="Your password"
+                  value={password} disabled={locked}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button" className="login-reveal" onClick={() => setReveal((v) => !v)}
+                  aria-pressed={reveal} aria-label={reveal ? 'Hide password' : 'Show password'}
+                >
+                  {reveal ? 'Hide' : 'Show'}
+                </button>
+              </span>
+            </label>
+
+            <div className="login-row">
+              <label className="checkbox">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <span>Keep me signed in for 30 days</span>
+              </label>
+              <span className="login-hint muted">8-hour session otherwise</span>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-block login-submit" disabled={busy || locked || !email || !password}>
+              {busy ? 'Verifying…' : locked ? `Locked · ${mmss(lockFor)}` : 'Sign in to console'}
+            </button>
+          </form>
+
+          <footer className="login-foot">
+            <LogoMark size={18} />
+            <span>PBKDF2-SHA256 · HttpOnly session cookie · lockout after 5 failed attempts</span>
+          </footer>
+        </section>
+
+        {/* ------------------------------------------------ demo credentials -- */}
+        <aside className="login-demo glass" aria-label="Demo credentials">
+          <div className="login-demo-head">
+            <h4>Demo credentials</h4>
+            {demo.state === 'loading'
+              ? <Badge tone="neutral">loading</Badge>
+              : demo.enabled ? <Badge tone="ok">enabled</Badge> : <Badge tone="out">disabled</Badge>}
+          </div>
+          <p className="login-demo-blurb muted">
+            {demo.state === 'loading' && 'Loading the seeded team…'}
+            {demo.state !== 'loading' && (demo.enabled
+              ? 'Seeded accounts for this environment — tap a row to fill the form.'
+              : 'Credential display is switched off for this environment.')}
+          </p>
+          <ul className="login-demo-list">
+            {(demo.accounts ?? []).map((account, index) => {
+              const shown = revealed[account.email] ? account.password : '••••••••'
+              return (
+                <li key={account.email} className={`demo-row demo-role-${account.role}`} style={{ '--i': index }}>
+                  <button type="button" className="demo-fill" onClick={() => useAccount(account)}>
+                    <span className="demo-badge">{ROLE_LABEL[account.role] ?? account.role}</span>
+                    <span className="demo-body">
+                      <span className="demo-email mono">{account.email}</span>
+                      <span className="demo-name">{account.name}</span>
+                    </span>
+                  </button>
+                  <span className="demo-secret">
+                    <span className="demo-password mono">{shown}</span>
+                    <button
+                      type="button" className="link-btn demo-reveal"
+                      aria-pressed={Boolean(revealed[account.email])}
+                      onClick={() => setRevealed((r) => ({ ...r, [account.email]: !r[account.email] }))}
+                    >
+                      {revealed[account.email] ? 'hide' : 'show'}
+                    </button>
+                  </span>
+                  <span className="demo-blurb muted">{ROLE_BLURB[account.role]}</span>
+                </li>
+              )
+            })}
+            {demo.state !== 'loading' && !(demo.accounts ?? []).length && (
+              <li className="demo-row demo-empty muted">No seeded credentials available.</li>
+            )}
+          </ul>
+          <p className="login-demo-foot muted">
+            Roles: <strong>Admin</strong> · <strong>Operator</strong> · <strong>Viewer</strong> — the Worker checks every request, so
+            a viewer is refused on write endpoints even if the form is forced.
+          </p>
+        </aside>
+      </div>
+
+      <p className="login-sig muted">
+        {loading ? 'Restoring session…' : 'StockPilot · Smart Inventory System'}
+      </p>
+    </div>
+  )
+}

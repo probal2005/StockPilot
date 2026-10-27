@@ -1,0 +1,120 @@
+/* ==========================================================================
+   Session context for the admin app: one source of truth for who is signed in,
+   what their role may do, and how the shell reacts when a session expires.
+   The Worker is the only thing that enforces access; everything here decides
+   what the interface offers.
+   ========================================================================== */
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { api, onUnauthorized } from './api.js'
+
+/**
+ * Mirror of the Worker's ROLE_CAPABILITIES (worker/auth.js). Keeping the copy
+ * lets the UI hide controls a role cannot use instead of letting a operator
+ * fill a form that would come back 403.
+ */
+export const CAPABILITIES = {
+  admin: ['read', 'move', 'manage', 'admin'],
+  operator: ['read', 'move'],
+  viewer: ['read'],
+}
+
+export const ROLE_LABEL = { admin: 'Admin', operator: 'Operator', viewer: 'Viewer' }
+export const ROLE_BLURB = {
+  admin: 'Full control — catalogue, movements, team access and the audit trail',
+  operator: 'Records stock movements and edits products',
+  viewer: 'Read-only dashboards, products and reports',
+}
+
+export const can = (user, capability) =>
+  Boolean(user && (CAPABILITIES[user.role] ?? []).includes(capability))
+
+const AuthCtx = createContext(null)
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null)
+  const [activeSessions, setActiveSessions] = useState(0)
+  const [status, setStatus] = useState('loading') // loading | anonymous | ready
+  const [notice, setNotice] = useState(null)
+
+  const adopt = useCallback((payload) => {
+    setUser(payload.user)
+    setActiveSessions(payload.active_sessions ?? 1)
+    setStatus('ready')
+  }, [])
+
+  // Restore a session using the bearer token held for this browser tab.
+  useEffect(() => {
+    let alive = true
+    api.session()
+      .then((payload) => {
+        if (!alive) return
+        if (payload.authenticated) adopt(payload)
+        else { setUser(null); setStatus('anonymous') }
+      })
+      .catch(() => {
+        if (alive) { setUser(null); setStatus('anonymous') }
+      })
+    return () => { alive = false }
+  }, [adopt])
+
+  /* A 401 from any request means the cookie is gone, revoked or expired. */
+  useEffect(() => onUnauthorized(() => {
+    setUser(null)
+    setActiveSessions(0)
+    setStatus('anonymous')
+    setNotice('Your session ended. Sign in again to continue.')
+  }), [])
+
+  const login = useCallback(async (email, password, remember) => {
+    const payload = await api.login({ email, password, remember })
+    setNotice(null)
+    adopt({ user: payload.user, active_sessions: 1 })
+    return payload.user
+  }, [adopt])
+
+  const logout = useCallback(async () => {
+    try { await api.logout() } catch { /* cookie already gone */ }
+    setUser(null)
+    setActiveSessions(0)
+    setStatus('anonymous')
+    setNotice('Signed out.')
+  }, [])
+
+  const changePassword = useCallback(async (current, next) => {
+    const payload = await api.changePassword({ current_password: current, new_password: next })
+    setActiveSessions(1) // other devices were just signed out
+    return payload
+  }, [])
+
+  const refreshSession = useCallback(async () => {
+    const payload = await api.session()
+    if (payload.authenticated) adopt(payload)
+  }, [adopt])
+
+  const value = useMemo(() => ({
+    user,
+    status,
+    activeSessions,
+    notice,
+    dismissNotice: () => setNotice(null),
+    loading: status === 'loading',
+    authenticated: Boolean(user),
+    login,
+    logout,
+    changePassword,
+    refreshSession,
+    can: (capability) => can(user, capability),
+  }), [user, status, activeSessions, notice, login, logout, changePassword, refreshSession])
+
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthCtx)
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')
+  return ctx
+}
+
+/** "Avery Stone" → "AS", for the avatar chip. */
+export const initials = (name = '') =>
+  name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '??'
