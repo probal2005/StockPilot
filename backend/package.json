@@ -1,0 +1,22 @@
+{
+  "name": "stockpilot-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent local Express API for StockPilot",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/config/env.js && node --check src/db/database.js && node --check src/routes/health.js && node --check src/routes/auth.js && node --check src/auth/passwords.js && node --check src/middleware/require-auth.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0"
+  }
+}
